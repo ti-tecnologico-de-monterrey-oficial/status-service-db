@@ -7,7 +7,9 @@ yarn-error.log*
 lerna-debug.log*
 
 # Library lock files
-package-lock.json
+# package-lock.json se versiona: la imagen se construye con `npm ci`, que lo
+# exige y es lo que garantiza que dos builds del mismo commit instalen
+# exactamente las mismas versiones.
 yarn.lock
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
