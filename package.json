@@ -24,5 +24,10 @@
     "nodemon": "^2.0.21",
     "sinon": "^15.2.0",
     "supertest": "^6.3.3"
+  },
+  "overrides": {
+    "ky-universal": {
+      "ky": "0.25.1"
+    }
   }
 }

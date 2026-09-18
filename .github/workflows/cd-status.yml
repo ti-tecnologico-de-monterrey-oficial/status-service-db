@@ -1,0 +1,31 @@
+name: CD · status-service-db
+
+# Los `paths` listan lo que entra en la imagen. Un cambio en el README, en las
+# pruebas o en los .env de ejemplo no produce una imagen distinta, así que
+# tampoco dispara un despliegue.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - '!src/**/*.test.js'
+      - '!src/test-fixtures/**'
+      - 'server.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - '.github/workflows/cd-status.yml'
+      - '.github/workflows/_deploy-aca.yml'
+
+jobs:
+  dev:
+    name: Desplegar a Dev
+    if: github.ref_name == 'main'
+    uses: ./.github/workflows/_deploy-aca.yml
+    with:
+      CONTAINER_NAME: dcc-status-devl
+      ACA_ENVIRONMENT: Dev
+    secrets: inherit

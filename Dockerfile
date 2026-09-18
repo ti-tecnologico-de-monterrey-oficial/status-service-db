@@ -1,19 +1,71 @@
-FROM node:19 as builder
-ADD . /app
-ENV NODE_ENV=production
+# Imagen del status-service-db: servicio Express que mantiene las listas de
+# estado de las credenciales en MongoDB.
+#
+# El contexto de build es la raíz del repositorio.
+#
+# Aquí no se compila nada: toda la configuración (puerto, conexión a la base,
+# semilla DID, niveles de log) se lee de variables de entorno en el arranque,
+# así que la misma imagen sirve para cualquier ambiente y no hay --build-arg
+# que pasar.
+
+FROM node:22-alpine AS deps
+
 WORKDIR /app
-RUN npm install 
 
-FROM gcr.io/distroless/nodejs18-debian11
-COPY --from=builder /app/node_modules /app/node_modules
-COPY --from=builder /app/server.js /app/server.js
-COPY --from=builder /app/src /app/src
-COPY --from=builder /app/package.json /app/package.json
+# Los manifiestos antes que el código, para que la capa de dependencias solo se
+# reconstruya cuando cambia el lockfile.
+COPY package.json package-lock.json ./
 
-# COPY --from=builder /app/healthcheck.js /app/healthcheck.js
-# The healthcheck can be run from here, but also from the compose file
-# HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 CMD ["/nodejs/bin/node", "app/healthcheck.js"]
+# --omit=dev: la imagen no corre pruebas ni linter, así que las
+# devDependencies solo agrandarían la superficie expuesta.
+#
+# --omit=peer: @digitalcredentials/bnid depende de react-native-securerandom,
+# cuyo peer es react-native completo —con hermes, metro y babel: 175 MB que
+# cuadruplican la imagen—. bnid solo toma ese camino cuando corre dentro de una
+# app móvil; en Node usa el crypto de la plataforma y nunca lo importa.
+#
+# --ignore-scripts: ninguna dependencia necesita su lifecycle script para
+# funcionar, y evitarlos cierra la puerta a que un paquete ejecute código
+# arbitrario durante la instalación.
+RUN npm ci --omit=dev --omit=peer --ignore-scripts
 
-CMD ["app/server.js"]
+FROM node:22-alpine AS runtime
 
-EXPOSE 4006
+# tini como PID 1: reenvía SIGTERM al proceso de Node cuando Container Apps
+# retira una revisión —Node no lo atiende por sí solo siendo PID 1— y recoge
+# los procesos huérfanos.
+RUN apk add --no-cache tini
+
+# El puerto viaja en la imagen en lugar de quedar en la configuración del
+# Container App: config.js cae a 4008 si PORT no está definido, y esa
+# diferencia con el targetPort del ingress no se nota hasta que el contenedor
+# está arriba y no responde.
+#
+# ENABLE_HTTPS_FOR_DEV se apaga explícitamente porque en este servicio su
+# default es true: sin esto, server.js busca server-dev-only.key —que no viaja
+# en la imagen— en lugar de escuchar http. En Container Apps el TLS lo termina
+# el ingress, así que el servidor siempre habla http.
+ENV NODE_ENV=production \
+    PORT=8080 \
+    ENABLE_HTTPS_FOR_DEV=false
+
+WORKDIR /app
+
+# Los archivos quedan a nombre de root y el proceso corre como node, de modo
+# que la aplicación no puede reescribir su propio código.
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json server.js ./
+COPY src ./src
+
+# El logger solo abre archivos si ERROR_LOG_FILE o ALL_LOG_FILE están
+# definidos, y esas rutas son relativas al WORKDIR. El directorio se crea aquí
+# y a nombre de node para que definirlas no reviente con EACCES.
+RUN mkdir logs && chown node:node logs
+
+USER node
+
+EXPOSE 8080
+
+ENTRYPOINT ["/sbin/tini", "--"]
+
+CMD ["node", "server.js"]

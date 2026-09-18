@@ -1,0 +1,139 @@
+name: Reusable · despliegue a ACA
+
+# Plantilla compartida de despliegue a Azure Container Apps. Es la misma en
+# issuer-coordinator, signing-service y status-service-db, para que los tres se
+# despliegue igual y un cambio en el procedimiento se copie sin traducirlo.
+#
+# A diferencia de la plantilla de tec-credentials-frontends, aquí la imagen no
+# se parametriza por ambiente: estos servicios leen su configuración de
+# variables de entorno en el arranque, así que un mismo build sirve para Dev,
+# PPRD y Prod y no hay ningún --build-arg que pasar.
+#
+# El nombre de la imagen en el registro coincide con el del Container App, para
+# que baste leer el nombre del contenedor para saber qué repositorio de ACR
+# revisar.
+#
+# Los valores que vienen de `vars` y `secrets` se pasan por `env` en lugar de
+# interpolarse dentro del script, para que su contenido no pueda alterar el
+# comando que se ejecuta.
+
+on:
+  workflow_call:
+    inputs:
+      CONTAINER_NAME:
+        description: Nombre del Container App destino
+        required: true
+        type: string
+      ACA_ENVIRONMENT:
+        description: Environment de GitHub del que se leen vars y secrets
+        required: true
+        type: string
+      DOCKER_PATH:
+        description: Ruta al Dockerfile, relativa a la raíz del repositorio
+        required: false
+        type: string
+        default: Dockerfile
+
+permissions:
+  contents: read
+
+# Dos merges seguidos sobre el mismo ambiente no deben solaparse a mitad del
+# `containerapp update`. No se cancela el que ya está en curso: dejar un
+# despliegue a medias es peor que esperar a que termine.
+concurrency:
+  group: deploy-${{ inputs.CONTAINER_NAME }}-${{ inputs.ACA_ENVIRONMENT }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Construir y publicar imagen
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.ACA_ENVIRONMENT }}
+    timeout-minutes: 30
+    steps:
+      - name: Clonar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Resolver etiqueta de la imagen
+        id: meta
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          # Etiqueta legible por rama, además del sha, para poder revertir sin
+          # tener que buscar el commit. Las barras no son válidas en un tag.
+          echo "image_tag=${REF_NAME//\//-}" >> "$GITHUB_OUTPUT"
+
+      - name: Iniciar sesión en Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Construir y publicar la imagen en ACR
+        env:
+          REGISTRY: ${{ vars.AZURE_CONTAINER_REGISTRY }}
+          RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP }}
+          DOCKER_PATH: ${{ inputs.DOCKER_PATH }}
+          IMAGE_NAME: ${{ inputs.CONTAINER_NAME }}
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          az acr build \
+            --registry "$REGISTRY" \
+            --resource-group "$RESOURCE_GROUP" \
+            --file "$DOCKER_PATH" \
+            --image "${REGISTRY}.azurecr.io/${IMAGE_NAME}:${SHA}" \
+            --image "${REGISTRY}.azurecr.io/${IMAGE_NAME}:${IMAGE_TAG}" \
+            .
+
+  deploy:
+    name: Actualizar Container App
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.ACA_ENVIRONMENT }}
+    needs: [build]
+    timeout-minutes: 15
+    steps:
+      - name: Iniciar sesión en Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # La extensión se instala de forma explícita en lugar de dejar que az la
+      # resuelva sola: en un runner sin terminal el instalador dinámico puede
+      # quedarse esperando confirmación.
+      - name: Preparar la extensión containerapp
+        run: az extension add --name containerapp --upgrade --only-show-errors
+
+      - name: Desplegar la nueva revisión
+        env:
+          REGISTRY: ${{ vars.AZURE_CONTAINER_REGISTRY }}
+          RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP }}
+          CONTAINER_NAME: ${{ inputs.CONTAINER_NAME }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          az containerapp update \
+            --name "$CONTAINER_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --image "${REGISTRY}.azurecr.io/${CONTAINER_NAME}:${SHA}" \
+            --output none
+
+          FQDN="$(az containerapp show \
+            --name "$CONTAINER_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)"
+
+          {
+            echo "### Despliegue completado"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Container App | \`${CONTAINER_NAME}\` |"
+            echo "| Imagen | \`${SHA}\` |"
+            echo "| URL | https://${FQDN} |"
+          } >> "$GITHUB_STEP_SUMMARY"
