@@ -1,0 +1,69 @@
+name: CI · Sonar
+
+on:
+  workflow_dispatch:
+
+  pull_request:
+    branches: [develop, release, main]
+    paths:
+      - 'src/**'
+      - 'server.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'sonar-project.properties'
+      - '.github/workflows/ci-sonar.yml'
+
+  push:
+    branches: [develop, release, main]
+    paths:
+      - 'src/**'
+      - 'server.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'sonar-project.properties'
+      - '.github/workflows/ci-sonar.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-sonar-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  sonar:
+    name: SonarQube
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Clonar el repositorio
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Ejecutar pruebas con cobertura
+        run: npm run test:coverage
+
+      - name: Verificar reporte LCOV
+        shell: bash
+        run: |
+          echo "Reporte de cobertura encontrado:"
+          test -f coverage/lcov.info
+          echo "El reporte LCOV fue generado correctamente."
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v8
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+

@@ -1,0 +1,53 @@
+name: CD · status-service-db
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop, release, main]
+    paths:
+      - 'src/**'
+      - 'server.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - '.github/workflows/cd-status-service-db.yml'
+      - '.github/workflows/_deploy-aca.yml'
+
+jobs:
+  dev:
+    name: Desplegar a Dev
+    if: github.ref_name == 'develop'
+    uses: ./.github/workflows/_deploy-aca.yml
+    with:
+      CONTAINER_NAME: dcc-status-devl
+      DOCKER_PATH: Dockerfile
+      ACA_ENVIRONMENT: Dev
+      ENVIRONMENT: development
+      USE_SUFFIX: false
+    secrets: inherit
+
+  release:
+    name: Desplegar a PPRD
+    if: github.ref_name == 'release'
+    uses: ./.github/workflows/_deploy-aca.yml
+    with:
+      CONTAINER_NAME: dcc-status-pprd
+      DOCKER_PATH: Dockerfile
+      ACA_ENVIRONMENT: Pprd
+      ENVIRONMENT: pprd
+      USE_SUFFIX: false
+    secrets: inherit
+
+  main:
+    name: Desplegar a Prod
+    if: github.ref_name == 'main'
+    uses: ./.github/workflows/_deploy-aca.yml
+    with:
+      CONTAINER_NAME: dcc-status-prod
+      DOCKER_PATH: Dockerfile
+      ACA_ENVIRONMENT: Prod
+      ENVIRONMENT: production
+      USE_SUFFIX: false
+    secrets: inherit
+

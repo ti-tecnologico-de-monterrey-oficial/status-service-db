@@ -1,0 +1,60 @@
+name: CI · status-service-db
+
+on:
+  pull_request:
+    branches: [develop, release, main]
+    paths:
+      - 'src/**'
+      - 'server.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/ci-status-service-db.yml'
+  push:
+    branches: [develop, release, main]
+    paths:
+      - 'src/**'
+      - 'server.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/ci-status-service-db.yml'
+
+permissions:
+  contents: read
+
+# Al empujar varias veces seguidas a un pull request solo interesa el
+# resultado del ultimo commit. En las ramas protegidas no se cancela: ahi el
+# historial de ejecuciones si importa.
+concurrency:
+  group: ci-status-service-db-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: Mocha con cobertura
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Clonar el repositorio
+        uses: actions/checkout@v7
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Ejecutar pruebas con cobertura
+        run: npm run test:coverage
+
+      - name: Publicar el reporte de cobertura
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-status-service-db
+          path: coverage/
+          retention-days: 14
