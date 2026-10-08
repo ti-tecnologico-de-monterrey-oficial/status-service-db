@@ -1,0 +1,8 @@
+{
+  "reporter": ["text", "lcov"],
+  "report-dir": "coverage",
+  "exclude": [
+    "src/**/*.test.js",
+    "src/test-fixtures/**"
+  ]
+}

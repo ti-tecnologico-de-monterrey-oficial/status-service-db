@@ -6,7 +6,8 @@
     "start": "node -r dotenv/config server.js",
     "dev": "nodemon -r dotenv/config server.js",
     "lt": "./localtunnel.sh",
-    "test": "NODE_OPTIONS=--experimental-vm-modules npx mocha --timeout 10000 -r dotenv/config dotenv_config_path=src/test-fixtures/.env.testing src/app.test.js "
+    "test": "NODE_OPTIONS=--experimental-vm-modules npx mocha --timeout 10000 -r dotenv/config dotenv_config_path=src/test-fixtures/.env.testing \"src/**/*.test.js\"",
+    "test:coverage": "NODE_OPTIONS=--experimental-vm-modules npx c8 npm test"
   },
   "dependencies": {
     "@digitalcredentials/credential-status-manager-db": "^0.0.1",
@@ -19,6 +20,7 @@
     "winston": "^3.11.0"
   },
   "devDependencies": {
+    "c8": "^10.1.2",
     "chai": "^4.3.7",
     "mocha": "^10.2.0",
     "nodemon": "^2.0.21",
