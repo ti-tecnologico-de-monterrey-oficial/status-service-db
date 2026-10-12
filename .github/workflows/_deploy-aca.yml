@@ -1,11 +1,17 @@
 name: Reusable · despliegue a ACA
 
-# Plantilla compartida de despliegue a Azure Container Apps, usada por
-# status-service-db (repo de un solo proyecto Node/Express, Dockerfile en
-# la raiz). El environment es literal (Dev / Pprd / Prod) y el nombre del
-# contenedor se pasa completo como input, sin sufijo.
+# Plantilla compartida de despliegue a Azure Container Apps. Es la misma en
+# issuer-coordinator, signing-service y status-service-db, para que los tres se
+# despliegue igual y un cambio en el procedimiento se copie sin traducirlo.
 #
-# El contexto de build es siempre la raiz del repositorio.
+# A diferencia de la plantilla de tec-credentials-frontends, aquí la imagen no
+# se parametriza por ambiente: estos servicios leen su configuración de
+# variables de entorno en el arranque, así que un mismo build sirve para Dev,
+# PPRD y Prod y no hay ningún --build-arg que pasar.
+#
+# El nombre de la imagen en el registro coincide con el del Container App, para
+# que baste leer el nombre del contenedor para saber qué repositorio de ACR
+# revisar.
 #
 # Los valores que vienen de `vars` y `secrets` se pasan por `env` en lugar de
 # interpolarse dentro del script, para que su contenido no pueda alterar el
@@ -18,37 +24,22 @@ on:
         description: Nombre del Container App destino
         required: true
         type: string
-      DOCKER_PATH:
-        description: Ruta al Dockerfile, relativa a la raiz del repositorio
-        required: true
-        type: string
       ACA_ENVIRONMENT:
         description: Environment de GitHub del que se leen vars y secrets
         required: true
         type: string
-      ENVIRONMENT:
-        description: >
-          Nombre del ambiente (development, pprd o production) que se pasa
-          como --build-arg ENV, por si el Dockerfile lo usa. Si se omite, se
-          usa vars.ENVIRONMENT del environment de GitHub; si tampoco hay, el
-          build sigue sin ese build-arg.
+      DOCKER_PATH:
+        description: Ruta al Dockerfile, relativa a la raíz del repositorio
         required: false
         type: string
-        default: ''
-      USE_SUFFIX:
-        description: >
-          Si es true, al CONTAINER_NAME se le agrega "-<vars.SUFFIX>".
-          El verifier lo pone en false porque su nombre ya viene completo.
-        required: false
-        type: boolean
-        default: true
+        default: Dockerfile
 
 permissions:
   contents: read
 
-# Dos merges seguidos sobre la misma aplicacion y ambiente no deben solaparse
-# a mitad del `containerapp update`. No se cancela el que ya esta en curso:
-# dejar un despliegue a medias es peor que esperar a que termine.
+# Dos merges seguidos sobre el mismo ambiente no deben solaparse a mitad del
+# `containerapp update`. No se cancela el que ya está en curso: dejar un
+# despliegue a medias es peor que esperar a que termine.
 concurrency:
   group: deploy-${{ inputs.CONTAINER_NAME }}-${{ inputs.ACA_ENVIRONMENT }}
   cancel-in-progress: false
@@ -59,53 +50,23 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.ACA_ENVIRONMENT }}
     timeout-minutes: 30
-    outputs:
-      image_name: ${{ steps.meta.outputs.image_name }}
     steps:
       - name: Clonar el repositorio
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
-      - name: Resolver nombre de imagen y configuracion de build
+      - name: Resolver etiqueta de la imagen
         id: meta
         env:
-          CONTAINER_NAME: ${{ inputs.CONTAINER_NAME }}
-          USE_SUFFIX: ${{ inputs.USE_SUFFIX }}
-          SUFFIX: ${{ vars.SUFFIX }}
-          INPUT_ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
-          VARS_ENVIRONMENT: ${{ vars.ENVIRONMENT }}
-          ACA_ENVIRONMENT: ${{ inputs.ACA_ENVIRONMENT }}
           REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
 
-          IMAGE_NAME="$CONTAINER_NAME"
-          if [ "$USE_SUFFIX" = "true" ]; then
-            if [ -z "$SUFFIX" ]; then
-              echo "::error::USE_SUFFIX es true pero vars.SUFFIX esta vacio en el environment '$ACA_ENVIRONMENT'."
-              exit 1
-            fi
-            IMAGE_NAME="${IMAGE_NAME}-${SUFFIX}"
-          fi
+          # Etiqueta legible por rama, además del sha, para poder revertir sin
+          # tener que buscar el commit. Las barras no son válidas en un tag.
+          echo "image_tag=${REF_NAME//\//-}" >> "$GITHUB_OUTPUT"
 
-          # La configuracion explicita del workflow gana sobre la del
-          # environment. Este Dockerfile no declara ARG ENV, asi que es
-          # opcional: si no hay ninguna, el build sigue sin ese build-arg.
-          BUILD_ENV="${INPUT_ENVIRONMENT:-$VARS_ENVIRONMENT}"
-
-          # Etiqueta legible por rama, ademas del sha, para poder revertir sin
-          # tener que buscar el commit. Las barras no son validas en un tag.
-          BRANCH_TAG="${REF_NAME//\//-}"
-
-          {
-            echo "image_name=${IMAGE_NAME}"
-            echo "image_tag=${BRANCH_TAG}"
-            echo "build_env=${BUILD_ENV}"
-          } >> "$GITHUB_OUTPUT"
-
-          echo "Imagen: ${IMAGE_NAME} · configuracion de build: ${BUILD_ENV}"
-
-      - name: Iniciar sesion en Azure
-        uses: azure/login@v3
+      - name: Iniciar sesión en Azure
+        uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
@@ -114,17 +75,11 @@ jobs:
           REGISTRY: ${{ vars.AZURE_CONTAINER_REGISTRY }}
           RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP }}
           DOCKER_PATH: ${{ inputs.DOCKER_PATH }}
-          IMAGE_NAME: ${{ steps.meta.outputs.image_name }}
+          IMAGE_NAME: ${{ inputs.CONTAINER_NAME }}
           IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
-          BUILD_ENV: ${{ steps.meta.outputs.build_env }}
           SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-
-          BUILD_ARGS=()
-          if [ -n "$BUILD_ENV" ]; then
-            BUILD_ARGS+=(--build-arg "ENV=$BUILD_ENV")
-          fi
 
           az acr build \
             --registry "$REGISTRY" \
@@ -132,7 +87,6 @@ jobs:
             --file "$DOCKER_PATH" \
             --image "${REGISTRY}.azurecr.io/${IMAGE_NAME}:${SHA}" \
             --image "${REGISTRY}.azurecr.io/${IMAGE_NAME}:${IMAGE_TAG}" \
-            "${BUILD_ARGS[@]}" \
             .
 
   deploy:
@@ -142,34 +96,34 @@ jobs:
     needs: [build]
     timeout-minutes: 15
     steps:
-      - name: Iniciar sesion en Azure
-        uses: azure/login@v3
+      - name: Iniciar sesión en Azure
+        uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # La extension se instala de forma explicita en lugar de dejar que az la
-      # resuelva sola: en un runner sin terminal el instalador dinamico puede
-      # quedarse esperando confirmacion.
-      - name: Preparar la extension containerapp
+      # La extensión se instala de forma explícita en lugar de dejar que az la
+      # resuelva sola: en un runner sin terminal el instalador dinámico puede
+      # quedarse esperando confirmación.
+      - name: Preparar la extensión containerapp
         run: az extension add --name containerapp --upgrade --only-show-errors
 
-      - name: Desplegar la nueva revision
+      - name: Desplegar la nueva revisión
         env:
           REGISTRY: ${{ vars.AZURE_CONTAINER_REGISTRY }}
           RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP }}
-          IMAGE_NAME: ${{ needs.build.outputs.image_name }}
+          CONTAINER_NAME: ${{ inputs.CONTAINER_NAME }}
           SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
 
           az containerapp update \
-            --name "$IMAGE_NAME" \
+            --name "$CONTAINER_NAME" \
             --resource-group "$RESOURCE_GROUP" \
-            --image "${REGISTRY}.azurecr.io/${IMAGE_NAME}:${SHA}" \
+            --image "${REGISTRY}.azurecr.io/${CONTAINER_NAME}:${SHA}" \
             --output none
 
           FQDN="$(az containerapp show \
-            --name "$IMAGE_NAME" \
+            --name "$CONTAINER_NAME" \
             --resource-group "$RESOURCE_GROUP" \
             --query properties.configuration.ingress.fqdn \
             --output tsv)"
@@ -179,7 +133,7 @@ jobs:
             echo ""
             echo "| | |"
             echo "|---|---|"
-            echo "| Container App | \`${IMAGE_NAME}\` |"
+            echo "| Container App | \`${CONTAINER_NAME}\` |"
             echo "| Imagen | \`${SHA}\` |"
             echo "| URL | https://${FQDN} |"
           } >> "$GITHUB_STEP_SUMMARY"

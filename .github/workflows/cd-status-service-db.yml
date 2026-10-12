@@ -6,6 +6,8 @@ on:
     branches: [develop, release, main]
     paths:
       - 'src/**'
+      - '!src/**/*.test.js'
+      - '!src/test-fixtures/**'
       - 'server.js'
       - 'package.json'
       - 'package-lock.json'
@@ -21,10 +23,7 @@ jobs:
     uses: ./.github/workflows/_deploy-aca.yml
     with:
       CONTAINER_NAME: dcc-status-devl
-      DOCKER_PATH: Dockerfile
       ACA_ENVIRONMENT: Dev
-      ENVIRONMENT: development
-      USE_SUFFIX: false
     secrets: inherit
 
   release:
@@ -33,10 +32,7 @@ jobs:
     uses: ./.github/workflows/_deploy-aca.yml
     with:
       CONTAINER_NAME: dcc-status-pprd
-      DOCKER_PATH: Dockerfile
       ACA_ENVIRONMENT: Pprd
-      ENVIRONMENT: pprd
-      USE_SUFFIX: false
     secrets: inherit
 
   main:
@@ -45,9 +41,6 @@ jobs:
     uses: ./.github/workflows/_deploy-aca.yml
     with:
       CONTAINER_NAME: dcc-status-prod
-      DOCKER_PATH: Dockerfile
       ACA_ENVIRONMENT: Prod
-      ENVIRONMENT: production
-      USE_SUFFIX: false
     secrets: inherit
 
