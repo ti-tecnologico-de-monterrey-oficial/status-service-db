@@ -1,6 +1,11 @@
 {
   "reporter": ["text", "lcov"],
   "report-dir": "coverage",
+  "check-coverage": true,
+  "lines": 90,
+  "functions": 90,
+  "branches": 90,
+  "statements": 90,
   "exclude": [
     "src/**/*.test.js",
     "src/test-fixtures/**"
