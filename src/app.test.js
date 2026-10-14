@@ -154,6 +154,18 @@ describe('api', () => {
       expect(response.body.message).to.equal('Credential successfully unsuspended.');
     });
 
+    it('returns 400 for an unsupported credential status', async () => {
+      await status.initializeStatusManager(emptyStatusManagerStub);
+      const app = await build();
+
+      const response = await request(app)
+        .post(updateEndpoint)
+        .send(getValidStatusUpdateBody(validCredentialId, 'pending'));
+
+      expect(response.status).to.equal(400);
+      expect(response.body.message).to.equal('Unsupported credential status: "pending"');
+    });
+
     it('returns 404 for unknown credential id', async () => {
       const missingCredentialError = new Error(invalidCredentialIdErrorMessage);
       missingCredentialError.code = 404;
@@ -169,6 +181,62 @@ describe('api', () => {
       expect(response.header['content-type']).to.have.string('json');
       expect(response.status).to.equal(404);
       expect(response.body.message).to.contain('Unable to find credential with ID');
+    });
+  });
+
+  describe('GET /credentials/:credentialId', () => {
+    it('returns credential information', async () => {
+      const credentialInfo = { id: validCredentialId };
+      const getCredentialInfo = sinon.fake.returns(credentialInfo);
+      await status.initializeStatusManager({ getCredentialInfo });
+      const app = await build();
+
+      const response = await request(app).get(`/credentials/${validCredentialId}`);
+
+      expect(response.status).to.equal(200);
+      expect(response.body).to.eql(credentialInfo);
+      expect(getCredentialInfo.calledOnceWithExactly(validCredentialId)).to.equal(true);
+    });
+
+    it('forwards credential lookup errors', async () => {
+      const failure = new Error('credential missing');
+      failure.code = 404;
+      const getCredentialInfo = sinon.fake.rejects(failure);
+      await status.initializeStatusManager({ getCredentialInfo });
+      const app = await build();
+
+      const response = await request(app).get(`/credentials/${validCredentialId}`);
+
+      expect(response.status).to.equal(404);
+      expect(response.body.message).to.contain('credential missing');
+    });
+  });
+
+  describe('GET /:statusCredentialId', () => {
+    it('returns a status credential', async () => {
+      const statusCredential = { id: 'status-list-1' };
+      const getStatusCredential = sinon.fake.returns(statusCredential);
+      await status.initializeStatusManager({ getStatusCredential });
+      const app = await build();
+
+      const response = await request(app).get('/status-list-1');
+
+      expect(response.status).to.equal(200);
+      expect(response.body).to.eql(statusCredential);
+      expect(getStatusCredential.calledOnceWithExactly('status-list-1')).to.equal(true);
+    });
+
+    it('forwards status credential lookup errors', async () => {
+      const failure = new Error('status list missing');
+      failure.code = 404;
+      const getStatusCredential = sinon.fake.rejects(failure);
+      await status.initializeStatusManager({ getStatusCredential });
+      const app = await build();
+
+      const response = await request(app).get('/status-list-missing');
+
+      expect(response.status).to.equal(404);
+      expect(response.body.message).to.contain('status list missing');
     });
   });
 });
