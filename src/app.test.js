@@ -72,6 +72,18 @@ describe('api', () => {
       expect(response.body).to.eql(unsignedVCWithStatus);
     });
 
+    it('returns an internal server error when allocation fails without a message', async () => {
+      const allocateRevocationStatus = sinon.fake.rejects(new Error());
+      await status.initializeStatusManager({ allocateRevocationStatus });
+      const app = await build();
+
+      const response = await request(app)
+        .post(allocateEndpoint)
+        .send(getUnsignedVC());
+
+      expect(response.status).to.equal(500);
+    });
+
     it('returns unchanged credential when status already set ', async () => {
       const allocateRevocationStatus = sinon.fake.returns(getUnsignedVCWithStatus());
       const statusManagerStub = { allocateRevocationStatus };
