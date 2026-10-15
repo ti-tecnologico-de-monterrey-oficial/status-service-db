@@ -6,6 +6,7 @@ on:
     paths:
       - 'src/**'
       - 'server.js'
+      - 'vitest.config.js'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/ci-status-service-db.yml'
@@ -14,6 +15,7 @@ on:
     paths:
       - 'src/**'
       - 'server.js'
+      - 'vitest.config.js'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/ci-status-service-db.yml'
@@ -30,7 +32,7 @@ concurrency:
 
 jobs:
   test:
-    name: Mocha con cobertura
+    name: Vitest con cobertura
     runs-on: ubuntu-latest
     timeout-minutes: 20
 

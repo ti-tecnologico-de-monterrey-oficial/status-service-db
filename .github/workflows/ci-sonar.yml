@@ -8,6 +8,7 @@ on:
     paths:
       - 'src/**'
       - 'server.js'
+      - 'vitest.config.js'
       - 'package.json'
       - 'package-lock.json'
       - 'sonar-project.properties'
@@ -18,6 +19,7 @@ on:
     paths:
       - 'src/**'
       - 'server.js'
+      - 'vitest.config.js'
       - 'package.json'
       - 'package-lock.json'
       - 'sonar-project.properties'
