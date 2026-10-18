@@ -15,19 +15,24 @@ WORKDIR /app
 # Los manifiestos antes que el código, para que la capa de dependencias solo se
 # reconstruya cuando cambia el lockfile.
 COPY package.json package-lock.json ./
+COPY patches ./patches
 
-# --omit=dev: la imagen no corre pruebas ni linter, así que las
-# devDependencies solo agrandarían la superficie expuesta.
-#
 # --omit=peer: @digitalcredentials/bnid depende de react-native-securerandom,
 # cuyo peer es react-native completo —con hermes, metro y babel: 175 MB que
 # cuadruplican la imagen—. bnid solo toma ese camino cuando corre dentro de una
 # app móvil; en Node usa el crypto de la plataforma y nunca lo importa.
-#
-# --ignore-scripts: ninguna dependencia necesita su lifecycle script para
-# funcionar, y evitarlos cierra la puerta a que un paquete ejecute código
-# arbitrario durante la instalación.
-RUN npm ci --omit=dev --omit=peer --ignore-scripts
+RUN npm ci --omit=peer
+
+# Verificar que el parche Bitstring se aplicó correctamente.
+RUN grep -q "131072" \
+    node_modules/@digitalcredentials/credential-status-manager-db/dist/credential-status-manager-base.js
+
+# Eliminar dependencias de desarrollo.
+RUN npm prune --omit=dev --omit=peer --ignore-scripts
+
+# Verificar que el parche se conserva después de npm prune.
+RUN grep -q "131072" \
+    node_modules/@digitalcredentials/credential-status-manager-db/dist/credential-status-manager-base.js
 
 FROM node:22-alpine AS runtime
 
@@ -46,7 +51,7 @@ RUN apk add --no-cache tini
 # en la imagen— en lugar de escuchar http. En Container Apps el TLS lo termina
 # el ingress, así que el servidor siempre habla http.
 ENV NODE_ENV=production \
-    PORT=8080 \
+    PORT=4008 \
     ENABLE_HTTPS_FOR_DEV=false
 
 WORKDIR /app
@@ -64,7 +69,7 @@ RUN mkdir logs && chown node:node logs
 
 USER node
 
-EXPOSE 8080
+EXPOSE 4008
 
 ENTRYPOINT ["/sbin/tini", "--"]
 
