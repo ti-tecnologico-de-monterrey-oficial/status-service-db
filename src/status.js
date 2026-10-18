@@ -1,5 +1,6 @@
 import { createStatusManager } from '@digitalcredentials/credential-status-manager-db';
 import { getConfig } from './config.js';
+import { ensureStatusIndexes } from './ensureStatusIndexes.js';
 
 const {
   credStatusService,
@@ -60,7 +61,11 @@ async function initializeStatusManager(statusManager) {
 
   switch (credStatusService) {
     case 'mongodb':
-      STATUS_LIST_MANAGER = await createMongoDbStatusManager();
+      // The library initializes the database automatically. Add the indexes
+      // to that same startup flow before exposing any HTTP endpoint.
+      const initializedManager = await createMongoDbStatusManager();
+      await ensureStatusIndexes(initializedManager);
+      STATUS_LIST_MANAGER = initializedManager;
       break;
     default:
       throw new Error(`Encountered unsupported credential status service: ${credStatusService}`);
