@@ -20,6 +20,7 @@ const {
 } = getConfig();
 
 let STATUS_LIST_MANAGER;
+let STATUS_LIST_MANAGER_PROMISE = null;
 
 async function createMongoDbStatusManager() {
   return createStatusManager({
@@ -52,29 +53,80 @@ async function createMongoDbStatusManager() {
 
 /* we allow passing in a status manager, for testing */
 async function initializeStatusManager(statusManager) {
+  // Mantener compatibilidad con las pruebas existentes.
   if (statusManager) {
     STATUS_LIST_MANAGER = statusManager;
     return;
-  } else if (STATUS_LIST_MANAGER) {
+  }
+
+  // El manager ya est� inicializado.
+  if (STATUS_LIST_MANAGER) {
     return;
   }
 
-  switch (credStatusService) {
-    case 'mongodb':
-      // The library initializes the database automatically. Add the indexes
-      // to that same startup flow before exposing any HTTP endpoint.
-      const initializedManager = await createMongoDbStatusManager();
-      await ensureStatusIndexes(initializedManager);
-      STATUS_LIST_MANAGER = initializedManager;
-      break;
-    default:
-      throw new Error(`Encountered unsupported credential status service: ${credStatusService}`);
+  // Crear una sola promesa de inicializaci�n.
+  if (!STATUS_LIST_MANAGER_PROMISE) {
+    STATUS_LIST_MANAGER_PROMISE = (async () => {
+      switch (credStatusService) {
+        case 'mongodb': {
+          const initializedManager =
+            await createMongoDbStatusManager();
+
+          // Los �ndices deben existir antes de publicar el manager.
+          await ensureStatusIndexes(initializedManager);
+
+          STATUS_LIST_MANAGER = initializedManager;
+          break;
+        }
+
+        default:
+          throw new Error(
+            `Encountered unsupported credential status service: ${credStatusService}`
+          );
+      }
+    })();
+  }
+
+  // Las llamadas concurrentes esperan la misma inicializaci�n.
+  const initialization = STATUS_LIST_MANAGER_PROMISE;
+
+  try {
+    await initialization;
+  } catch (error) {
+    // Permitir otro intento si falla la inicializaci�n.
+    if (STATUS_LIST_MANAGER_PROMISE === initialization) {
+      STATUS_LIST_MANAGER_PROMISE = null;
+    }
+
+    throw error;
   }
 }
 
 async function getStatusManager() {
   await initializeStatusManager();
   return STATUS_LIST_MANAGER;
+}
+
+/**
+ * V2.2
+ * Cierra las conexiones MongoDB compartidas cuando
+ * el servidor HTTP termina de procesar sus solicitudes.
+ */
+async function closeStatusManager() {
+  if (!STATUS_LIST_MANAGER) {
+    return;
+  }
+
+  if (
+    typeof STATUS_LIST_MANAGER.closeSharedDatabaseClient ===
+    'function'
+  ) {
+    await STATUS_LIST_MANAGER.closeSharedDatabaseClient();
+
+    console.info(
+      '[STATUS_POOL] MongoDB shared client closed.'
+    );
+  }
 }
 
 async function allocateRevocationStatus(verifiableCredential) {
@@ -123,6 +175,7 @@ async function getStatusCredential(statusCredentialId) {
 export default {
   initializeStatusManager,
   getStatusManager,
+  closeStatusManager,
   allocateRevocationStatus,
   updateStatus,
   getCredentialInfo,

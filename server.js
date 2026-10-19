@@ -1,5 +1,6 @@
 import { build } from './src/app.js';
 import { getConfig } from './src/config.js';
+import status from './src/status.js';
 import fs from 'fs';
 import http from 'http';
 import https from 'https';
@@ -200,19 +201,110 @@ const run = async () => {
   const { port, enableHttpsForDev } = getConfig();
   const app = await build();
 
-  if (enableHttpsForDev) {
-    https
-      .createServer(
-        {
-          key: fs.readFileSync('server-dev-only.key'),
-          cert: fs.readFileSync('server-dev-only.cert')
-        },
-        app
-      ).listen(port, () => logger.info(`Server running on port ${port} with https`));
-  } else {
-    http
-      .createServer(app).listen(port, () => logger.info(`Server running on port ${port} with http`));
+const server = enableHttpsForDev
+  ? https.createServer(
+      {
+        key: fs.readFileSync('server-dev-only.key'),
+        cert: fs.readFileSync('server-dev-only.cert')
+      },
+      app
+    )
+  : http.createServer(app);
+
+server.listen(port, () => {
+  logger.info(
+    `Server running on port ${port} with ${
+      enableHttpsForDev ? 'https' : 'http'
+    }`
+  );
+});
+
+// V2.2: cierre ordenado del servidor y del pool MongoDB.
+let shuttingDown = false;
+
+async function shutdown(signal) {
+  if (shuttingDown) {
+    return;
   }
+
+  shuttingDown = true;
+
+  logger.info(
+    `[SHUTDOWN] Received ${signal}. Starting graceful shutdown.`
+  );
+
+  const configuredTimeout = Number(
+    process.env.STATUS_SHUTDOWN_TIMEOUT_MS
+  );
+
+  const timeoutMs =
+    Number.isFinite(configuredTimeout) &&
+    configuredTimeout > 0
+      ? configuredTimeout
+      : 25000;
+
+  // Protección contra un apagado que no termina.
+  const shutdownTimer = setTimeout(() => {
+    logger.error(
+      `[SHUTDOWN] Timeout after ${timeoutMs}ms. Forcing exit.`
+    );
+
+    process.exit(1);
+  }, timeoutMs);
+
+  shutdownTimer.unref();
+
+  try {
+    // 1. Detener nuevas conexiones HTTP.
+    // 2. Esperar la finalización de solicitudes activas.
+    await new Promise((resolve, reject) => {
+      server.close(error => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
+      });
+    });
+
+    logger.info(
+      '[SHUTDOWN] HTTP server closed.'
+    );
+
+    // 3. Las solicitudes terminaron:
+    // ahora podemos cerrar el MongoClient compartido.
+    await status.closeStatusManager();
+
+    logger.info(
+      '[SHUTDOWN] MongoDB pool closed.'
+    );
+
+    logger.info(
+      '[SHUTDOWN] Graceful shutdown completed.'
+    );
+
+    process.exitCode = 0;
+  } catch (error) {
+    logger.error(
+      `[SHUTDOWN] Error: ${error.message}`
+    );
+
+    process.exitCode = 1;
+  } finally {
+    clearTimeout(shutdownTimer);
+  }
+}
+
+// Azure Container Apps utiliza SIGTERM al detener el contenedor.
+process.once('SIGTERM', () => {
+  void shutdown('SIGTERM');
+});
+
+// Permite cerrar ordenadamente con Ctrl+C durante desarrollo.
+process.once('SIGINT', () => {
+  void shutdown('SIGINT');
+});
 };
 
 run();
