@@ -27,7 +27,7 @@ export async function build(opts = {}) {
       try {
         const vc = req.body;
         if (!vc || !Object.keys(vc).length) {
-          next({
+          return next({
             message: 'A Verifiable Credential must be provided in the body.',
             code: 400
           });

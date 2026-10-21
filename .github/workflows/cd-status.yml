@@ -10,6 +10,7 @@ on:
     branches: [main]
     paths:
       - 'src/**'
+      - 'patches/**'
       - '!src/**/*.test.js'
       - '!src/test-fixtures/**'
       - 'server.js'
@@ -21,7 +22,21 @@ on:
       - '.github/workflows/_deploy-aca.yml'
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - run: npm ci --omit=peer
+      - run: npm run test
+      - run: node --test test/integrity.unit.test.js
+
   dev:
+    needs: [validate]
     name: Desplegar a Dev
     if: github.ref_name == 'main'
     uses: ./.github/workflows/_deploy-aca.yml
