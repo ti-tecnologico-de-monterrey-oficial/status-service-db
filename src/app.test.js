@@ -1,5 +1,4 @@
-import { expect } from 'chai';
-import sinon from 'sinon';
+import { expect, vi } from 'vitest';
 import request from 'supertest';
 import {
   validCredentialId,
@@ -58,7 +57,7 @@ describe('api', () => {
 
     it('returns updated credential', async () => {
       const unsignedVCWithStatus = getUnsignedVCWithStatus();
-      const allocateRevocationStatus = sinon.fake.returns(unsignedVCWithStatus);
+      const allocateRevocationStatus = vi.fn().mockReturnValue(unsignedVCWithStatus);
       const statusManagerStub = { allocateRevocationStatus };
       await status.initializeStatusManager(statusManagerStub);
       const app = await build();
@@ -73,7 +72,7 @@ describe('api', () => {
     });
 
     it('returns an internal server error when allocation fails without a message', async () => {
-      const allocateRevocationStatus = sinon.fake.rejects(new Error());
+      const allocateRevocationStatus = vi.fn().mockRejectedValue(new Error());
       await status.initializeStatusManager({ allocateRevocationStatus });
       const app = await build();
 
@@ -84,8 +83,21 @@ describe('api', () => {
       expect(response.status).to.equal(500);
     });
 
+    it('keeps the original message when allocation fails with one', async () => {
+      const allocateRevocationStatus = vi.fn().mockRejectedValue(new Error('database offline'));
+      await status.initializeStatusManager({ allocateRevocationStatus });
+      const app = await build();
+
+      const response = await request(app)
+        .post(allocateEndpoint)
+        .send(getUnsignedVC());
+
+      expect(response.status).to.equal(500);
+      expect(response.body.message).to.contain('database offline');
+    });
+
     it('returns unchanged credential when status already set ', async () => {
-      const allocateRevocationStatus = sinon.fake.returns(getUnsignedVCWithStatus());
+      const allocateRevocationStatus = vi.fn().mockReturnValue(getUnsignedVCWithStatus());
       const statusManagerStub = { allocateRevocationStatus };
       await status.initializeStatusManager(statusManagerStub);
       const app = await build();
@@ -113,7 +125,7 @@ describe('api', () => {
     });
 
     it('returns update from revoked credential', async () => {
-      const revokeCredential = sinon.fake.returns({
+      const revokeCredential = vi.fn().mockReturnValue({
         code: 200,
         message: 'Credential successfully revoked.'
       });
@@ -131,7 +143,7 @@ describe('api', () => {
     });
 
     it('returns update from suspended credential', async () => {
-      const suspendCredential = sinon.fake.returns({
+      const suspendCredential = vi.fn().mockReturnValue({
         code: 200,
         message: 'Credential successfully suspended.'
       });
@@ -149,7 +161,7 @@ describe('api', () => {
     });
 
     it('returns update from unsuspended credential', async () => {
-      const unsuspendCredential = sinon.fake.returns({
+      const unsuspendCredential = vi.fn().mockReturnValue({
         code: 200,
         message: 'Credential successfully unsuspended.'
       });
@@ -179,7 +191,7 @@ describe('api', () => {
     });
 
     it('returns 400 and does not update when the status type is not supported', async () => {
-      const revokeCredential = sinon.fake.resolves();
+      const revokeCredential = vi.fn().mockResolvedValue();
       await status.initializeStatusManager({ revokeCredential });
       const app = await build();
 
@@ -192,13 +204,13 @@ describe('api', () => {
 
       expect(response.status).to.equal(400);
       expect(response.body.message).to.contain('BitstringStatusListCredential is the only supported status type.');
-      expect(revokeCredential.called).to.equal(false);
+      expect(revokeCredential).not.toHaveBeenCalled();
     });
 
     it('returns 500 with a default message when the update fails unexpectedly', async () => {
       await status.initializeStatusManager(emptyStatusManagerStub);
       const app = await build();
-      const updateStatus = sinon.stub(status, 'updateStatus').rejects({});
+      const updateStatus = vi.spyOn(status, 'updateStatus').mockRejectedValue({});
 
       try {
         const response = await request(app)
@@ -208,14 +220,14 @@ describe('api', () => {
         expect(response.status).to.equal(500);
         expect(response.body.message).to.contain('Error updating credential status position.');
       } finally {
-        updateStatus.restore();
+        updateStatus.mockRestore();
       }
     });
 
     it('keeps the message of an unexpected update failure', async () => {
       await status.initializeStatusManager(emptyStatusManagerStub);
       const app = await build();
-      const updateStatus = sinon.stub(status, 'updateStatus').rejects(new Error('database offline'));
+      const updateStatus = vi.spyOn(status, 'updateStatus').mockRejectedValue(new Error('database offline'));
 
       try {
         const response = await request(app)
@@ -225,14 +237,14 @@ describe('api', () => {
         expect(response.status).to.equal(500);
         expect(response.body.message).to.contain('database offline');
       } finally {
-        updateStatus.restore();
+        updateStatus.mockRestore();
       }
     });
 
     it('returns 404 for unknown credential id', async () => {
       const missingCredentialError = new Error(invalidCredentialIdErrorMessage);
       missingCredentialError.code = 404;
-      const revokeCredential = sinon.fake.rejects(missingCredentialError);
+      const revokeCredential = vi.fn().mockRejectedValue(missingCredentialError);
       const statusManagerStub = { revokeCredential };
       await status.initializeStatusManager(statusManagerStub);
       const app = await build();
@@ -250,7 +262,7 @@ describe('api', () => {
   describe('GET /credentials/:credentialId', () => {
     it('returns credential information', async () => {
       const credentialInfo = { id: validCredentialId };
-      const getCredentialInfo = sinon.fake.returns(credentialInfo);
+      const getCredentialInfo = vi.fn().mockReturnValue(credentialInfo);
       await status.initializeStatusManager({ getCredentialInfo });
       const app = await build();
 
@@ -258,13 +270,13 @@ describe('api', () => {
 
       expect(response.status).to.equal(200);
       expect(response.body).to.eql(credentialInfo);
-      expect(getCredentialInfo.calledOnceWithExactly(validCredentialId)).to.equal(true);
+      expect(getCredentialInfo).toHaveBeenCalledExactlyOnceWith(validCredentialId);
     });
 
     it('forwards credential lookup errors', async () => {
       const failure = new Error('credential missing');
       failure.code = 404;
-      const getCredentialInfo = sinon.fake.rejects(failure);
+      const getCredentialInfo = vi.fn().mockRejectedValue(failure);
       await status.initializeStatusManager({ getCredentialInfo });
       const app = await build();
 
@@ -278,7 +290,7 @@ describe('api', () => {
   describe('GET /:statusCredentialId', () => {
     it('returns a status credential', async () => {
       const statusCredential = { id: 'status-list-1' };
-      const getStatusCredential = sinon.fake.returns(statusCredential);
+      const getStatusCredential = vi.fn().mockReturnValue(statusCredential);
       await status.initializeStatusManager({ getStatusCredential });
       const app = await build();
 
@@ -286,13 +298,13 @@ describe('api', () => {
 
       expect(response.status).to.equal(200);
       expect(response.body).to.eql(statusCredential);
-      expect(getStatusCredential.calledOnceWithExactly('status-list-1')).to.equal(true);
+      expect(getStatusCredential).toHaveBeenCalledExactlyOnceWith('status-list-1');
     });
 
     it('forwards status credential lookup errors', async () => {
       const failure = new Error('status list missing');
       failure.code = 404;
-      const getStatusCredential = sinon.fake.rejects(failure);
+      const getStatusCredential = vi.fn().mockRejectedValue(failure);
       await status.initializeStatusManager({ getStatusCredential });
       const app = await build();
 

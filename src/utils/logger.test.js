@@ -29,4 +29,18 @@ describe('logger', () => {
   it('only logs warnings and errors outside development', async () => {
     expect((await loadLogger({ LOG_LEVEL: '', NODE_ENV: 'production' })).level).toBe('warn');
   });
+
+  it('writes to the console and both log files when they are configured', async () => {
+    const logger = await loadLogger({
+      CONSOLE_LOG_LEVEL: 'info',
+      ERROR_LOG_FILE: 'logs/error.log',
+      ALL_LOG_FILE: 'logs/all.log'
+    });
+    expect(logger.transports.map(transport => transport.name)).toEqual(['console', 'file', 'file']);
+  });
+
+  it('has no transports when the console is disabled and no files are set', async () => {
+    const logger = await loadLogger({ CONSOLE_LOG_LEVEL: 'none', ERROR_LOG_FILE: '', ALL_LOG_FILE: '' });
+    expect(logger.transports).toHaveLength(0);
+  });
 });

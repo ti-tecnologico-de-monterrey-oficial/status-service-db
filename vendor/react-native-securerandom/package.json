@@ -1,0 +1,7 @@
+{
+  "name": "react-native-securerandom",
+  "version": "1.0.1-node",
+  "description": "Sustituto para Node de react-native-securerandom: bnid solo lo importa en su build de React Native.",
+  "main": "index.js",
+  "license": "MIT"
+}

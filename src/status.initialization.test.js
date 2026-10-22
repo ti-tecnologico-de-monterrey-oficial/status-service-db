@@ -76,6 +76,20 @@ describe('status manager initialization', () => {
     expect(mocks.createStatusManager).toHaveBeenCalledTimes(2);
   });
 
+  it('lets every concurrent caller see a failed initialization and retries once', async () => {
+    const manager = {};
+    mocks.createStatusManager
+      .mockRejectedValueOnce(new Error('database offline'))
+      .mockResolvedValueOnce(manager);
+    const status = await loadStatus();
+
+    const results = await Promise.allSettled([status.getStatusManager(), status.getStatusManager()]);
+
+    expect(results.map(result => result.reason?.message)).toEqual(['database offline', 'database offline']);
+    expect(await status.getStatusManager()).toBe(manager);
+    expect(mocks.createStatusManager).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps the newer initialization when an older one fails afterwards', async () => {
     let failFirst;
     mocks.createStatusManager

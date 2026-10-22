@@ -12,7 +12,7 @@ coverage
 *.lcov
 logs
 
-# Pruebas: vitest, sinon y supertest son devDependencies que la imagen no
+# Pruebas: vitest y supertest son devDependencies que la imagen no
 # instala, así que sus archivos tampoco tienen por qué viajar en ella.
 src/**/*.test.js
 src/test-fixtures

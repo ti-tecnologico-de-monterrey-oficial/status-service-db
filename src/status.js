@@ -66,24 +66,14 @@ async function initializeStatusManager(statusManager) {
 
   // Crear una sola promesa de inicialización.
   if (!STATUS_LIST_MANAGER_PROMISE) {
+    // config.js solo acepta CRED_STATUS_SERVICE=mongodb.
     STATUS_LIST_MANAGER_PROMISE = (async () => {
-      switch (credStatusService) {
-        case 'mongodb': {
-          const initializedManager =
-            await createMongoDbStatusManager();
+      const initializedManager = await createMongoDbStatusManager();
 
-          // Los índices deben existir antes de publicar el manager.
-          await ensureStatusIndexes(initializedManager);
+      // Los índices deben existir antes de publicar el manager.
+      await ensureStatusIndexes(initializedManager);
 
-          STATUS_LIST_MANAGER = initializedManager;
-          break;
-        }
-
-        default:
-          throw new Error(
-            `Encountered unsupported credential status service: ${credStatusService}`
-          );
-      }
+      STATUS_LIST_MANAGER = initializedManager;
     })();
   }
 

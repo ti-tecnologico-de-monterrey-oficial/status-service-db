@@ -1,7 +1,11 @@
 import { defineConfig } from 'vitest/config';
 
+process.loadEnvFile('src/test-fixtures/.env.testing');
+
 export default defineConfig({
   test: {
+    globals: true,
+    testTimeout: 10000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],

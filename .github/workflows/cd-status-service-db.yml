@@ -9,6 +9,8 @@ on:
       - '!src/**/*.test.js'
       - '!src/test-fixtures/**'
       - 'patches/**'
+      - 'vendor/**'
+      - '.npmrc'
       - 'server.js'
       - 'package.json'
       - 'package-lock.json'
