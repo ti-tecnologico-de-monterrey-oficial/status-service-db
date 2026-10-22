@@ -5,11 +5,15 @@ const errorHandler = (error, request, response, next) => {
   // and more easily understandable, referring to the logs
   // for more detail
 
-  const code = error.code | 500;
+  // Los errores de MongoDB traen códigos propios (11000, 112) que no son
+  // estados HTTP; esos se responden como 500.
+  const code = Number.isInteger(error.code) && error.code >= 400 && error.code < 600
+    ? error.code
+    : 500;
   const message = `An error occurred in status-service-db: ${error.message ?? 'unknown error.'} See the logs for full details. If you are using docker compose, view the logs with 'docker compose logs', and just the status service logs with: 'docker compose logs status-service-db'`;
   const errorResponse = {code, message};
   response.header('Content-Type', 'application/json');
-  return response.status(error.code).json(errorResponse);
+  return response.status(code).json(errorResponse);
 };
 
 export default errorHandler;

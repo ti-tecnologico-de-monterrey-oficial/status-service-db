@@ -6,7 +6,9 @@
     "start": "node -r dotenv/config server.js",
     "dev": "nodemon -r dotenv/config server.js",
     "lt": "./localtunnel.sh",
-    "test": "NODE_OPTIONS=--experimental-vm-modules npx mocha --timeout 10000 -r dotenv/config dotenv_config_path=src/test-fixtures/.env.testing src/app.test.js "
+    "test": "cross-env DOTENV_CONFIG_PATH=src/test-fixtures/.env.testing NODE_OPTIONS=--import=dotenv/config vitest run --globals --testTimeout=10000",
+    "test:coverage": "npm test -- --coverage",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@digitalcredentials/credential-status-manager-db": "^0.0.1",
@@ -19,15 +21,20 @@
     "winston": "^3.11.0"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^3.2.4",
     "chai": "^4.3.7",
-    "mocha": "^10.2.0",
+    "cross-env": "^7.0.3",
     "nodemon": "^2.0.21",
+    "patch-package": "^8.0.1",
     "sinon": "^15.2.0",
-    "supertest": "^6.3.3"
+    "supertest": "^6.3.3",
+    "vitest": "^3.2.4"
   },
   "overrides": {
-    "ky-universal": {
-      "ky": "0.25.1"
+    "@digitalcredentials/http-client@1.2.2": {
+      "ky-universal": {
+        "ky": "0.25.1"
+      }
     }
   }
 }

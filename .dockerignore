@@ -1,6 +1,60 @@
-**/*.env
+# Contexto de build de Docker.
+#
+# El Dockerfile se construye con la raíz del repositorio como contexto, así que
+# este archivo decide qué se empaqueta y se sube al build. La regla es que solo
+# entre lo que la imagen ejecuta: package.json, package-lock.json, server.js y
+# src/ sin sus pruebas.
+
+# Dependencias y artefactos regenerables
 node_modules
+coverage
+.nyc_output
+*.lcov
+logs
+
+# Pruebas: vitest, sinon y supertest son devDependencies que la imagen no
+# instala, así que sus archivos tampoco tienen por qué viajar en ella.
+src/**/*.test.js
+src/test-fixtures
+test
+vitest.config.js
+sonar-project.properties
+
+# Control de versiones y automatización
+.git
+.gitignore
+.gitattributes
+.github
+
+# Documentación
+*.md
+LICENSE
+
+# Herramientas de desarrollo
+.eslintcache
+.vscode
+.idea
+.claude
+Dockerfile
+.dockerignore
 compose.yaml
 compose-local-mongo.yaml
 localtunnel.sh
-README.md
+
+# Certificados autofirmados de desarrollo. ENABLE_HTTPS_FOR_DEV solo aplica en
+# local —en Container Apps el TLS lo termina el ingress— y un par de llaves
+# versionado en el repositorio no debe viajar dentro de la imagen.
+server-dev-only.cert
+server-dev-only.key
+
+# Entorno local y logs
+**/*.env
+.env
+.env.*
+*.log
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
