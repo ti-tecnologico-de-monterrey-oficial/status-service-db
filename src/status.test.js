@@ -1,5 +1,4 @@
-import { expect } from 'chai';
-import sinon from 'sinon';
+import { expect, vi } from 'vitest';
 import status from './status.js';
 
 describe('status manager operations', () => {
@@ -23,27 +22,27 @@ describe('status manager operations', () => {
   it('allocates status when the credential has no status', async () => {
     const credential = { id: 'credential-1' };
     const credentialWithStatus = { ...credential, credentialStatus: [{ statusListIndex: 1 }] };
-    const allocateRevocationStatus = sinon.fake.resolves(credentialWithStatus);
+    const allocateRevocationStatus = vi.fn().mockResolvedValue(credentialWithStatus);
     await status.initializeStatusManager({ allocateRevocationStatus });
 
     const result = await status.allocateRevocationStatus(credential);
 
     expect(result).to.equal(credentialWithStatus);
-    expect(allocateRevocationStatus.calledOnceWithExactly(credential)).to.equal(true);
+    expect(allocateRevocationStatus).toHaveBeenCalledExactlyOnceWith(credential);
   });
 
   it('returns the same credential when it already has status', async () => {
     const credential = { credentialStatus: [{ statusListIndex: 1 }] };
-    const allocateRevocationStatus = sinon.fake();
+    const allocateRevocationStatus = vi.fn();
     await status.initializeStatusManager({ allocateRevocationStatus });
 
     expect(await status.allocateRevocationStatus(credential)).to.equal(credential);
-    expect(allocateRevocationStatus.called).to.equal(false);
+    expect(allocateRevocationStatus).not.toHaveBeenCalled();
   });
 
   it('propagates allocation failures', async () => {
     const failure = new Error('allocation failed');
-    const allocateRevocationStatus = sinon.fake.rejects(failure);
+    const allocateRevocationStatus = vi.fn().mockRejectedValue(failure);
     await status.initializeStatusManager({ allocateRevocationStatus });
 
     try {
@@ -60,14 +59,14 @@ describe('status manager operations', () => {
     ['unsuspended', 'unsuspendCredential', 'Credential successfully unsuspended.']
   ]) {
     it(`applies the ${credentialStatus} status`, async () => {
-      const managerMethod = sinon.fake.resolves();
+      const managerMethod = vi.fn().mockResolvedValue();
       await status.initializeStatusManager({ [methodName]: managerMethod });
 
       expect(await status.updateStatus('credential-1', credentialStatus)).to.eql({
         code: 200,
         message: expectedMessage
       });
-      expect(managerMethod.calledOnceWithExactly('credential-1')).to.equal(true);
+      expect(managerMethod).toHaveBeenCalledExactlyOnceWith('credential-1');
     });
   }
 
@@ -83,7 +82,7 @@ describe('status manager operations', () => {
   it('preserves manager error codes and messages', async () => {
     const failure = new Error('already revoked');
     failure.code = 409;
-    const revokeCredential = sinon.fake.rejects(failure);
+    const revokeCredential = vi.fn().mockRejectedValue(failure);
     await status.initializeStatusManager({ revokeCredential });
 
     expect(await status.updateStatus('credential-1', 'revoked')).to.eql({
@@ -95,7 +94,7 @@ describe('status manager operations', () => {
   it('uses fallback status error values when manager errors omit them', async () => {
     const failure = new Error();
     Object.defineProperty(failure, 'message', { value: undefined });
-    const revokeCredential = sinon.fake.rejects(failure);
+    const revokeCredential = vi.fn().mockRejectedValue(failure);
     await status.initializeStatusManager({ revokeCredential });
 
     expect(await status.updateStatus('credential-1', 'revoked')).to.eql({
@@ -107,19 +106,19 @@ describe('status manager operations', () => {
   it('forwards credential info and status credential lookups', async () => {
     const credentialInfo = { id: 'credential-1' };
     const statusCredential = { id: 'status-list-1' };
-    const getCredentialInfo = sinon.fake.resolves(credentialInfo);
-    const getStatusCredential = sinon.fake.resolves(statusCredential);
+    const getCredentialInfo = vi.fn().mockResolvedValue(credentialInfo);
+    const getStatusCredential = vi.fn().mockResolvedValue(statusCredential);
     await status.initializeStatusManager({ getCredentialInfo, getStatusCredential });
 
     expect(await status.getCredentialInfo('credential-1')).to.equal(credentialInfo);
     expect(await status.getStatusCredential('status-list-1')).to.equal(statusCredential);
-    expect(getCredentialInfo.calledOnceWithExactly('credential-1')).to.equal(true);
-    expect(getStatusCredential.calledOnceWithExactly('status-list-1')).to.equal(true);
+    expect(getCredentialInfo).toHaveBeenCalledExactlyOnceWith('credential-1');
+    expect(getStatusCredential).toHaveBeenCalledExactlyOnceWith('status-list-1');
   });
 
   it('propagates lookup failures', async () => {
     const failure = new Error('lookup failed');
-    const getCredentialInfo = sinon.fake.rejects(failure);
+    const getCredentialInfo = vi.fn().mockRejectedValue(failure);
     await status.initializeStatusManager({ getCredentialInfo });
 
     try {

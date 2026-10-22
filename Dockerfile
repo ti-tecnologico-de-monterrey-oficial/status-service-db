@@ -8,19 +8,20 @@
 # así que la misma imagen sirve para cualquier ambiente y no hay --build-arg
 # que pasar.
 
-FROM node:22-alpine AS deps
+FROM node:24-alpine AS deps
 
 WORKDIR /app
 
 # Los manifiestos antes que el código, para que la capa de dependencias solo se
 # reconstruya cuando cambia el lockfile.
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json .npmrc ./
 COPY patches ./patches
+# Sustituto de react-native-securerandom (ver overrides en package.json):
+# @digitalcredentials/bnid solo lo usa dentro de una app móvil, y el paquete
+# real arrastra react-native completo como peer.
+COPY vendor ./vendor
 
-# --omit=peer: @digitalcredentials/bnid depende de react-native-securerandom,
-# cuyo peer es react-native completo —con hermes, metro y babel: 175 MB que
-# cuadruplican la imagen—. bnid solo toma ese camino cuando corre dentro de una
-# app móvil; en Node usa el crypto de la plataforma y nunca lo importa.
+# --omit=peer: ningún peer opcional de las dependencias hace falta en la imagen.
 RUN npm ci --omit=peer
 
 # Verificar que el parche Bitstring se aplicó correctamente.
@@ -34,7 +35,7 @@ RUN npm prune --omit=dev --omit=peer --ignore-scripts
 RUN grep -q "131072" \
     node_modules/@digitalcredentials/credential-status-manager-db/dist/credential-status-manager-base.js
 
-FROM node:22-alpine AS runtime
+FROM node:24-alpine AS runtime
 
 # tini como PID 1: reenvía SIGTERM al proceso de Node cuando Container Apps
 # retira una revisión —Node no lo atiende por sí solo siendo PID 1— y recoge

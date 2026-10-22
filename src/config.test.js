@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from 'vitest';
 import { getConfig, resetConfig, setConfig } from './config.js';
 
 const envKeys = [
