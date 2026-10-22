@@ -15,7 +15,6 @@
   },
   "dependencies": {
     "@digitalcredentials/credential-status-manager-db": "^0.0.1",
-    "cors": "^2.8.6",
     "express": "^5.3.0",
     "morgan": "^1.12.1",
     "winston": "^3.19.0"

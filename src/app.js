@@ -1,5 +1,4 @@
 import express from 'express';
-import cors from 'cors';
 import status from './status.js';
 import accessLogger from './middleware/accessLogger.js';
 import errorHandler from './middleware/errorHandler.js';
@@ -15,7 +14,6 @@ export async function build(opts = {}) {
   app.use(accessLogger());
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
-  app.use(cors());
 
   app.get('/', function (req, res, next) {
     res.json({ message: 'status-service-db server status: ok.' });
