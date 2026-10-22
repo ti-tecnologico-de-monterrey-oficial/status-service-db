@@ -27,7 +27,7 @@ export async function build(opts = {}) {
       try {
         const vc = req.body;
         if (!vc || !Object.keys(vc).length) {
-          next({
+          return next({
             message: 'A Verifiable Credential must be provided in the body.',
             code: 400
           });
@@ -42,8 +42,9 @@ export async function build(opts = {}) {
           e.message = 'Unable to allocate status position.'
         }
         // Note that if e contains a code property, the following spread of e will
-        // (correctly) overwrite the 500
-        next({ code: 500, ...e });
+        // (correctly) overwrite the 500. message is not enumerable on Error
+        // instances, so the spread skips it and it is copied explicitly.
+        next({ code: 500, ...e, message: e.message });
       }
     });
 
@@ -60,7 +61,7 @@ export async function build(opts = {}) {
       try {
         const updateRequest = req.body;
         if (!updateRequest || !updateRequest.credentialId || !updateRequest.credentialStatus) {
-          next({
+          return next({
             message: 'A status update request must be provided in the body.',
             code: 400
           });
@@ -70,7 +71,7 @@ export async function build(opts = {}) {
         const statusType = credentialStatus[0].type;
 
         if (statusType !== 'BitstringStatusListCredential') {
-          next({
+          return next({
             message: 'BitstringStatusListCredential is the only supported status type.',
             code: 400
           });
@@ -83,8 +84,9 @@ export async function build(opts = {}) {
           e.message = 'Error updating credential status position.'
         }
         // Note that if e contains a code property, the following spread of e will
-        // (correctly) overwrite the 500
-        next({ code: 500, ...e });
+        // (correctly) overwrite the 500. message is not enumerable on Error
+        // instances, so the spread skips it and it is copied explicitly.
+        next({ code: 500, ...e, message: e.message });
       }
     });
 

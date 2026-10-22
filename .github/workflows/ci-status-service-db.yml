@@ -5,6 +5,8 @@ on:
     branches: [develop, release, main]
     paths:
       - 'src/**'
+      - 'test/**'
+      - 'patches/**'
       - 'server.js'
       - 'vitest.config.js'
       - 'package.json'
@@ -14,6 +16,8 @@ on:
     branches: [develop, release, main]
     paths:
       - 'src/**'
+      - 'test/**'
+      - 'patches/**'
       - 'server.js'
       - 'vitest.config.js'
       - 'package.json'

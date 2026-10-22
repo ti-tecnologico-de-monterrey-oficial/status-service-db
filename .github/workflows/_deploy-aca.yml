@@ -52,7 +52,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Clonar el repositorio
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Resolver etiqueta de la imagen
         id: meta

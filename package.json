@@ -7,7 +7,8 @@
     "dev": "nodemon -r dotenv/config server.js",
     "lt": "./localtunnel.sh",
     "test": "cross-env DOTENV_CONFIG_PATH=src/test-fixtures/.env.testing NODE_OPTIONS=--import=dotenv/config vitest run --globals --testTimeout=10000",
-    "test:coverage": "npm test -- --coverage"
+    "test:coverage": "npm test -- --coverage",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@digitalcredentials/credential-status-manager-db": "^0.0.1",
@@ -24,6 +25,7 @@
     "chai": "^4.3.7",
     "cross-env": "^7.0.3",
     "nodemon": "^2.0.21",
+    "patch-package": "^8.0.1",
     "sinon": "^15.2.0",
     "supertest": "^6.3.3",
     "vitest": "^3.2.4"

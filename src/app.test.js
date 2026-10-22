@@ -178,6 +178,57 @@ describe('api', () => {
       expect(response.body.message).to.equal('Unsupported credential status: "pending"');
     });
 
+    it('returns 400 and does not update when the status type is not supported', async () => {
+      const revokeCredential = sinon.fake.resolves();
+      await status.initializeStatusManager({ revokeCredential });
+      const app = await build();
+
+      const response = await request(app)
+        .post(updateEndpoint)
+        .send({
+          credentialId: validCredentialId,
+          credentialStatus: [{ type: 'StatusList2021Credential', status: 'revoked' }]
+        });
+
+      expect(response.status).to.equal(400);
+      expect(response.body.message).to.contain('BitstringStatusListCredential is the only supported status type.');
+      expect(revokeCredential.called).to.equal(false);
+    });
+
+    it('returns 500 with a default message when the update fails unexpectedly', async () => {
+      await status.initializeStatusManager(emptyStatusManagerStub);
+      const app = await build();
+      const updateStatus = sinon.stub(status, 'updateStatus').rejects({});
+
+      try {
+        const response = await request(app)
+          .post(updateEndpoint)
+          .send(getValidStatusUpdateBody(validCredentialId, 'revoked'));
+
+        expect(response.status).to.equal(500);
+        expect(response.body.message).to.contain('Error updating credential status position.');
+      } finally {
+        updateStatus.restore();
+      }
+    });
+
+    it('keeps the message of an unexpected update failure', async () => {
+      await status.initializeStatusManager(emptyStatusManagerStub);
+      const app = await build();
+      const updateStatus = sinon.stub(status, 'updateStatus').rejects(new Error('database offline'));
+
+      try {
+        const response = await request(app)
+          .post(updateEndpoint)
+          .send(getValidStatusUpdateBody(validCredentialId, 'revoked'));
+
+        expect(response.status).to.equal(500);
+        expect(response.body.message).to.contain('database offline');
+      } finally {
+        updateStatus.restore();
+      }
+    });
+
     it('returns 404 for unknown credential id', async () => {
       const missingCredentialError = new Error(invalidCredentialIdErrorMessage);
       missingCredentialError.code = 404;
