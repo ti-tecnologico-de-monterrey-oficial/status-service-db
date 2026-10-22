@@ -10,9 +10,8 @@ const url = process.env.V2_MONGO_TEST_URL;
 const didSeed = process.env.V2_DID_TEST_SEED;
 const dbName = process.env.V2_MONGO_TEST_DB;
 const enabled = Boolean(url && didSeed && /^credentialStatus_v2_test_[A-Za-z0-9_]+$/.test(dbName ?? ''));
-const guardedTest = enabled ? test : test.skip;
 
-guardedTest('MongoDB real: 1 + 2 + 5 + 10 concurrent allocations preserve all counters',
+test.runIf(enabled)('MongoDB real: 1 + 2 + 5 + 10 concurrent allocations preserve all counters',
   { timeout: 180000 }, async () => {
     const manager = await createStatusManager({
       databaseService: 'mongodb',
