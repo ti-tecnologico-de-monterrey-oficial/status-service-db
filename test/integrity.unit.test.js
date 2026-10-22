@@ -43,7 +43,7 @@ test('replace accepts matched unchanged documents', async () => {
   const { manager } = managerWithCollection({
     replaceOne: async () => ({ acknowledged: true, matchedCount: 1, modifiedCount: 0 })
   });
-  await manager.updateRecord('Config', 'id', 'config', { id: 'config' });
+  await assert.doesNotReject(manager.updateRecord('Config', 'id', 'config', { id: 'config' }));
 });
 
 test('duplicate revocation index is retryable; duplicate credential id is not', async () => {

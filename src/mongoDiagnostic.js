@@ -73,33 +73,37 @@ async function diagnoseSrvConnection(seedHost) {
     return;
   }
 
-  for (const record of records) {
-    const target = record.name.replace(/\.$/, '');
-    const port = record.port;
+  // Cada mensaje nombra su target, así que revisar los nodos en paralelo
+  // no mezcla los resultados y el arranque espera al más lento, no a la suma.
+  await Promise.all(records.map(diagnoseSrvTarget));
+}
+
+async function diagnoseSrvTarget(record) {
+  const target = record.name.replace(/\.$/, '');
+  const port = record.port;
+
+  console.log(
+    `[Mongo diagnostic] SRV target: ${target}:${port}`
+  );
+
+  try {
+    const addresses = await dns.lookup(target, {
+      all: true
+    });
 
     console.log(
-      `[Mongo diagnostic] SRV target: ${target}:${port}`
+      `[Mongo diagnostic] Target DNS: ${formatAddresses(addresses)}`
+    );
+  } catch (error) {
+    console.error(
+      `[Mongo diagnostic] Target DNS failed for ${target}: ` +
+      `${error.code ?? 'UNKNOWN'} - ${error.message}`
     );
 
-    try {
-      const addresses = await dns.lookup(target, {
-        all: true
-      });
-
-      console.log(
-        `[Mongo diagnostic] Target DNS: ${formatAddresses(addresses)}`
-      );
-    } catch (error) {
-      console.error(
-        `[Mongo diagnostic] Target DNS failed for ${target}: ` +
-        `${error.code ?? 'UNKNOWN'} - ${error.message}`
-      );
-
-      continue;
-    }
-
-    await testTcpConnection(target, port);
+    return;
   }
+
+  await testTcpConnection(target, port);
 }
 
 async function diagnoseDirectConnection(seedHost, urlPort) {

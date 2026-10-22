@@ -1,6 +1,6 @@
-import fs from 'fs';
-import http from 'http';
-import https from 'https';
+import fs from 'node:fs';
+import http from 'node:http';
+import https from 'node:https';
 import { build } from './app.js';
 import { getConfig } from './config.js';
 import { diagnoseMongoConnectivity } from './mongoDiagnostic.js';

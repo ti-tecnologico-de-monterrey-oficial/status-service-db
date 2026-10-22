@@ -30,7 +30,7 @@ export async function ensureStatusIndexes(statusManager) {
     const indexes = await credentials.listIndexes().toArray();
     for (const name of ['ux_user_credential_id', 'ux_revocation_status_index']) {
       const index = indexes.find(item => item.name === name);
-      if (!index || index.unique !== true) {
+      if (index?.unique !== true) {
         throw new Error(`Required unique MongoDB index was not created: ${name}`);
       }
     }
