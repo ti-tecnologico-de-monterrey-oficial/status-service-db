@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "engines": {
-    "node": ">=24"
+    "node": ">=26.13.0"
   },
   "scripts": {
     "start": "node --env-file-if-exists=.env server.js",

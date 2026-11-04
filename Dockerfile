@@ -8,7 +8,7 @@
 # así que la misma imagen sirve para cualquier ambiente y no hay --build-arg
 # que pasar.
 
-FROM node:24-alpine AS deps
+FROM node:26.13.0-alpine AS deps
 
 WORKDIR /app
 
@@ -35,7 +35,7 @@ RUN npm prune --omit=dev --omit=peer --ignore-scripts
 RUN grep -q "131072" \
     node_modules/@digitalcredentials/credential-status-manager-db/dist/credential-status-manager-base.js
 
-FROM node:24-alpine AS runtime
+FROM node:26.13.0-alpine AS runtime
 
 # tini como PID 1: reenvía SIGTERM al proceso de Node cuando Container Apps
 # retira una revisión —Node no lo atiende por sí solo siendo PID 1— y recoge
